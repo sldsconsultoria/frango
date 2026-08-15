@@ -535,6 +535,9 @@
             <label style="display:flex; align-items:center; gap:5px; font-weight:400; text-transform:none; letter-spacing:0; font-size:.82rem; color:var(--text);">
               <input type="checkbox" class="vdAcompChk" value="Vinagrete" onchange="limitarAcompanhamentos(this)"> Vinagrete
             </label>
+            <label style="display:flex; align-items:center; gap:5px; font-weight:400; text-transform:none; letter-spacing:0; font-size:.82rem; color:var(--text);">
+              <input type="checkbox" class="vdAcompChk" value="Farofa" onchange="limitarAcompanhamentos(this)"> Farofa
+            </label>
           </div>
         </div>
         <div class="field" style="min-width:280px;">
@@ -1088,9 +1091,9 @@ function defaultData(){
       googleSheetsUrl: 'https://script.google.com/macros/s/AKfycbypolIIfMhnDHNSlC8yy01UgXebsQESaknOouiuzT_OBcX8URa722-Qf2lLFbZ0sYmJBg/exec'
     },
     usuarios: [
-      { id: uid(), nome: 'Luiz', login: 'luiz', senha: 'davi', papel: 'admin' },
+      { id: uid(), nome: 'Luiz', login: 'luiz', senha: '8956', papel: 'admin' },
       { id: uid(), nome: 'admin', login: 'salomao', senha: '01062001', papel: 'admin' },
-      { id: uid(), nome: 'Maria', login: 'maria', senha: 'levi', papel: 'vendedor' }
+      { id: uid(), nome: 'Maria', login: 'maria', senha: '2580', papel: 'vendedor' }
     ],
     precos: [
       { id: uid(), nome: 'Frango', preco: 46 },
@@ -1129,6 +1132,32 @@ function defaultData(){
 let data = loadData();
 let currentUser = null;
 
+function removerPrecosDuplicados(precos){
+  const vistos = new Map();
+  precos.forEach(p => {
+    const chave = (p.nome||'').trim().toLowerCase();
+    if(!chave) return;
+    vistos.set(chave, p); // mantém a última ocorrência (mais recente)
+  });
+  return Array.from(vistos.values());
+}
+
+function mesclarEstoqueDuplicado(estoque){
+  const vistos = new Map();
+  estoque.forEach(e => {
+    const chave = (e.item||'').trim().toLowerCase();
+    if(!chave) return;
+    if(vistos.has(chave)){
+      const existente = vistos.get(chave);
+      existente.estoqueInicial = (existente.estoqueInicial||0) + (e.estoqueInicial||0);
+      existente.entradas = (existente.entradas||0) + (e.entradas||0);
+    }else{
+      vistos.set(chave, Object.assign({}, e));
+    }
+  });
+  return Array.from(vistos.values());
+}
+
 function loadData(){
   try{
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -1145,9 +1174,9 @@ function loadData(){
       });
       if(!resultado.usuarios || !resultado.usuarios.length){
         resultado.usuarios = [
-          { id: uid(), nome: 'Luiz', login: 'luiz', senha: 'davi', papel: 'admin' },
+          { id: uid(), nome: 'Luiz', login: 'luiz', senha: '8956', papel: 'admin' },
           { id: uid(), nome: 'admin', login: 'salomao', senha: '01062001', papel: 'admin' },
-          { id: uid(), nome: 'Maria', login: 'maria', senha: 'levi', papel: 'vendedor' }
+          { id: uid(), nome: 'Maria', login: 'maria', senha: '2580', papel: 'vendedor' }
         ];
       }
       if(!resultado.config.googleSheetsUrl){
@@ -1171,6 +1200,9 @@ function loadData(){
       resultado.despesas.forEach(d => {
         if(d.grupo === 'Acompanhamento') d.grupo = 'Frango';
       });
+      // remove produtos e itens de estoque duplicados (mesmo nome) que possam ter entrado nos dados salvos
+      resultado.precos = removerPrecosDuplicados(resultado.precos);
+      resultado.estoque = mesclarEstoqueDuplicado(resultado.estoque);
       return resultado;
     }
   }catch(e){}
@@ -1230,8 +1262,8 @@ async function importarGoogleSheetsAuto(){
     const importado = await resp.json();
     if(importado.vendas) data.vendas = importado.vendas;
     if(importado.despesas) data.despesas = importado.despesas;
-    if(importado.estoque && importado.estoque.length) data.estoque = importado.estoque;
-    if(importado.precos && importado.precos.length) data.precos = importado.precos;
+    if(importado.estoque && importado.estoque.length) data.estoque = mesclarEstoqueDuplicado(importado.estoque);
+    if(importado.precos && importado.precos.length) data.precos = removerPrecosDuplicados(importado.precos);
     if(importado.usuarios && importado.usuarios.length) data.usuarios = importado.usuarios;
     if(importado.config && Object.keys(importado.config).length) data.config = Object.assign(data.config, importado.config);
     if(importado.fechamentoObs) data.fechamentoObs = importado.fechamentoObs;
@@ -1248,7 +1280,7 @@ async function importarGoogleSheetsAuto(){
    ============================================================ */
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 
-const GRUPO_GUARNICAO = ['Arroz', 'Vinagrete', 'Maionese', 'Salpicão', 'Feijão tropeiro'];
+const GRUPO_GUARNICAO = ['Arroz', 'Vinagrete', 'Maionese', 'Salpicão', 'Feijão tropeiro', 'Farofa'];
 const GRUPO_BEBIDA = ['Guaraná Mineiro 1,5L', 'Coca-cola 2L', 'Coca-cola Zero 2L', 'Fanta Laranja 2L'];
 const GRUPO_PIZZAS = ['Pizza', 'Pacote de pizza'];
 const GRUPO_TAXA = ['Taxa de entrega'];
@@ -1774,6 +1806,11 @@ function salvarPreco(){
   const preco = parseFloat(document.getElementById('pcPreco').value);
   if(!nome){ alert('Informe o nome do produto.'); return; }
   if(preco == null || isNaN(preco) || preco < 0){ alert('Informe um preço válido.'); return; }
+  const existente = data.precos.find(p => p.nome.trim().toLowerCase() === nome.toLowerCase());
+  if(existente){
+    alert(`Já existe um produto chamado "${existente.nome}". Edite-o na tabela em vez de cadastrar novamente.`);
+    return;
+  }
   data.precos.push({ id: uid(), nome, preco });
   saveData();
   document.getElementById('pcNome').value = '';
@@ -1817,7 +1854,13 @@ function salvarEdicaoPreco(){
   const id = document.getElementById('epId').value;
   const p = data.precos.find(x => x.id === id);
   if(!p) return;
-  p.nome = document.getElementById('epNome').value.trim();
+  const novoNome = document.getElementById('epNome').value.trim();
+  const duplicado = data.precos.find(x => x.id !== id && x.nome.trim().toLowerCase() === novoNome.toLowerCase());
+  if(duplicado){
+    alert(`Já existe um produto chamado "${duplicado.nome}".`);
+    return;
+  }
+  p.nome = novoNome;
   p.preco = parseFloat(document.getElementById('epPreco').value) || 0;
   saveData();
   fecharModal('modalEditarPreco');
@@ -2417,8 +2460,8 @@ async function importarGoogleSheets(){
     const importado = await resp.json();
     if(importado.vendas) data.vendas = importado.vendas;
     if(importado.despesas) data.despesas = importado.despesas;
-    if(importado.estoque) data.estoque = importado.estoque;
-    if(importado.precos) data.precos = importado.precos;
+    if(importado.estoque) data.estoque = mesclarEstoqueDuplicado(importado.estoque);
+    if(importado.precos) data.precos = removerPrecosDuplicados(importado.precos);
     if(importado.usuarios && importado.usuarios.length) data.usuarios = importado.usuarios;
     if(importado.config && Object.keys(importado.config).length) data.config = Object.assign(data.config, importado.config);
     if(importado.fechamentoObs) data.fechamentoObs = importado.fechamentoObs;
