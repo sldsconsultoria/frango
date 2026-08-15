@@ -252,6 +252,9 @@
   .grupo-card.lucro-neg .barra-lucro .fill{background:var(--danger);}
 
   /* ===== ESTOQUE BAIXO (chips) ===== */
+  .estoque-grupo-bloco{margin-bottom:10px;}
+  .estoque-grupo-bloco:last-child{margin-bottom:0;}
+  .estoque-grupo-titulo{font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-bottom:6px;}
   .estoque-alert-list{display:flex; flex-wrap:wrap; gap:8px;}
   .estoque-alert-chip{
     display:flex; align-items:center; gap:7px; padding:7px 13px; border-radius:20px;
@@ -1844,6 +1847,11 @@ function salvarEstoqueItem(){
   const unidade = document.getElementById('etUnidade').value.trim() || 'un';
   const inicial = parseFloat(document.getElementById('etInicial').value) || 0;
   if(!item){ alert('Informe o nome do item.'); return; }
+  const existente = data.estoque.find(e => e.item.trim().toLowerCase() === item.toLowerCase());
+  if(existente){
+    alert(`Já existe um item de estoque chamado "${existente.item}". Edite-o na tabela em vez de cadastrar novamente.`);
+    return;
+  }
   data.estoque.push({ id: uid(), item, unidade, estoqueInicial: inicial, entradas: 0 });
   saveData();
   document.getElementById('etItem').value = '';
@@ -2020,15 +2028,39 @@ function renderPainel(){
   // relatório por grupo (centro de custo)
   renderTabelaGrupos(calcularGrupos(vendasMes, despesasMes), 'pnGrupoTabela');
 
-  // estoque baixo
-  const baixos = data.estoque.map(e => {
+  // estoque baixo (agrupado por nome, caso existam itens duplicados nos dados salvos)
+  const estoqueAgrupado = {};
+  data.estoque.forEach(e => {
+    const chave = (e.item||'').trim().toLowerCase();
+    if(!chave) return;
+    if(!estoqueAgrupado[chave]){
+      estoqueAgrupado[chave] = { item: e.item, unidade: e.unidade || '', estoqueInicial: 0, entradas: 0 };
+    }
+    estoqueAgrupado[chave].estoqueInicial += (e.estoqueInicial||0);
+    estoqueAgrupado[chave].entradas += (e.entradas||0);
+  });
+  const baixos = Object.values(estoqueAgrupado).map(e => {
     const vendido = vendidoDoItem(e.item);
-    const atual = (e.estoqueInicial||0) + (e.entradas||0) - vendido;
-    return { item: e.item, unidade: e.unidade || '', atual };
+    const atual = e.estoqueInicial + e.entradas - vendido;
+    return { item: e.item, unidade: e.unidade, atual };
   }).filter(e => e.atual <= 0);
   const estBaixoEl = document.getElementById('pnEstoqueBaixo');
   if(baixos.length){
-    estBaixoEl.innerHTML = baixos.map(e => `<div class="estoque-alert-chip"><i class="fa-solid fa-triangle-exclamation"></i>${escapeHtml(e.item)}<span style="opacity:.75; font-weight:800;">&nbsp;— ${e.atual} ${escapeHtml(e.unidade)}</span></div>`).join('');
+    const porGrupo = {};
+    baixos.forEach(e => {
+      const g = grupoDeExibicao(e.item);
+      if(!porGrupo[g]) porGrupo[g] = [];
+      porGrupo[g].push(e);
+    });
+    const gruposOrdenados = Object.keys(porGrupo).sort((a,b) => ORDEM_GRUPOS.indexOf(a) - ORDEM_GRUPOS.indexOf(b));
+    estBaixoEl.innerHTML = gruposOrdenados.map(g => `
+      <div class="estoque-grupo-bloco">
+        <div class="estoque-grupo-titulo">${escapeHtml(g)}</div>
+        <div class="estoque-alert-list">
+          ${porGrupo[g].map(e => `<div class="estoque-alert-chip"><i class="fa-solid fa-triangle-exclamation"></i>${escapeHtml(e.item)}<span style="opacity:.75; font-weight:800;">&nbsp;— ${e.atual} ${escapeHtml(e.unidade)}</span></div>`).join('')}
+        </div>
+      </div>
+    `).join('');
   }else{
     estBaixoEl.innerHTML = '<div class="estoque-ok-msg"><i class="fa-solid fa-circle-check"></i> Nenhum item em falta</div>';
   }
