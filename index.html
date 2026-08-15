@@ -1086,7 +1086,7 @@ function defaultData(){
     },
     usuarios: [
       { id: uid(), nome: 'Luiz', login: 'luiz', senha: 'davi', papel: 'admin' },
-      { id: uid(), nome: 'Salomão', login: 'salomao', senha: '01062001', papel: 'admin' },
+      { id: uid(), nome: 'admin', login: 'salomao', senha: '01062001', papel: 'admin' },
       { id: uid(), nome: 'Maria', login: 'maria', senha: 'levi', papel: 'vendedor' }
     ],
     precos: [
@@ -1143,7 +1143,7 @@ function loadData(){
       if(!resultado.usuarios || !resultado.usuarios.length){
         resultado.usuarios = [
           { id: uid(), nome: 'Luiz', login: 'luiz', senha: 'davi', papel: 'admin' },
-          { id: uid(), nome: 'Salomão', login: 'salomao', senha: '01062001', papel: 'admin' },
+          { id: uid(), nome: 'admin', login: 'salomao', senha: '01062001', papel: 'admin' },
           { id: uid(), nome: 'Maria', login: 'maria', senha: 'levi', papel: 'vendedor' }
         ];
       }
@@ -2291,9 +2291,25 @@ function renderUsuarios(){
       <td>${escapeHtml(u.nome)}</td>
       <td>${escapeHtml(u.login)}</td>
       <td><span class="badge ${u.papel === 'admin' ? 'info' : 'warn'}">${u.papel === 'admin' ? 'Administrador' : 'Vendedor'}</span></td>
-      <td class="col-actions"><i class="fa-solid fa-trash btn-icon danger" onclick="excluirUsuario('${u.id}')"></i></td>
+      <td class="col-actions">
+        <i class="fa-solid fa-key btn-icon" title="Alterar senha" onclick="editarSenhaUsuario('${u.id}')"></i>
+        <i class="fa-solid fa-trash btn-icon danger" onclick="excluirUsuario('${u.id}')"></i>
+      </td>
     </tr>
   `).join('');
+}
+
+function editarSenhaUsuario(id){
+  if(!apenasAdmin()) return;
+  const u = data.usuarios.find(x => x.id === id);
+  if(!u) return;
+  const nova = prompt(`Nova senha para "${u.nome}":`, '');
+  if(nova === null) return; // cancelado
+  if(!nova || nova.length < 4){ alert('A senha deve ter pelo menos 4 caracteres.'); return; }
+  u.senha = nova;
+  saveData();
+  renderUsuarios();
+  alert(`Senha de "${u.nome}" atualizada.`);
 }
 
 function excluirUsuario(id){
@@ -2856,6 +2872,10 @@ if(sessaoSalva){
 
 // Ao abrir o app, busca a versão mais recente dos dados direto do Google Sheets
 importarGoogleSheetsAuto();
+
+// Mantém sincronizado automaticamente: busca atualizações da planilha a cada 2 minutos
+// (útil quando outro usuário/dispositivo lança vendas ao mesmo tempo)
+setInterval(importarGoogleSheetsAuto, 120000);
 </script>
 </body>
 </html>
