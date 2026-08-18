@@ -2,8 +2,23 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Frango do Tio Luiz — Gestão de Vendas</title>
+
+<!-- ===== PWA: instalação no Android/iOS ===== -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#3E1E0D">
+<meta name="background-color" content="#FBF5EA">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="icon" href="icons/icon-512.png" sizes="512x512" type="image/png">
+<!-- iOS: "Adicionar à Tela de Início" -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tio Luiz">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<!-- Android: cor da barra de endereço/app -->
+<meta name="mobile-web-app-capable" content="yes">
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -205,6 +220,7 @@
   .btn.wa{background:#25D366; color:#fff;}
   .btn.outline{background:#fff; border:1.5px solid var(--brown-deep); color:var(--brown-deep);}
   .btn.danger{background:var(--danger); color:#fff;}
+  .btn.ok{background:var(--ok); color:#fff;}
   .btn.sm{padding:5px 10px; font-size:.72rem;}
   .btn:disabled{opacity:.5; cursor:not-allowed;}
   .btn-icon{background:none; border:none; color:var(--muted); cursor:pointer; padding:4px 6px; font-size:.85rem;}
@@ -341,6 +357,43 @@
     .top-produto-row .nome{flex:0 0 90px;}
     .doc-sheet{padding:16px;}
   }
+
+  /* ===== Telas muito pequenas (iPhone SE e similares) ===== */
+  @media (max-width:380px){
+    .app-header h1{font-size:.9rem;}
+    .app-header .sub{font-size:.62rem;}
+    .header-stat span{font-size:.8rem;}
+    .tab-btn{padding:10px 10px; font-size:.74rem;}
+    .stat-card{min-width:78%; flex:0 0 78%;}
+    .stat-card .value{font-size:1.1rem;}
+    .content{padding:8px;}
+    .panel-box{padding:10px;}
+    .btn{padding:9px 10px; font-size:.75rem;}
+  }
+
+  /* ===== Tablets (retrato/paisagem) ===== */
+  @media (min-width:769px) and (max-width:1100px){
+    .grid-2{grid-template-columns:1fr 1fr;}
+    .grid-3{grid-template-columns:1fr 1fr;}
+    .content{padding:16px;}
+  }
+
+  /* ===== Respeita a "área segura" em iPhones com notch/Dynamic Island ===== */
+  .app-header{
+    padding-top:calc(16px + env(safe-area-inset-top));
+    padding-left:calc(24px + env(safe-area-inset-left));
+    padding-right:calc(24px + env(safe-area-inset-right));
+  }
+  @media (max-width:768px){
+    .app-header{
+      padding-top:calc(10px + env(safe-area-inset-top));
+      padding-left:calc(12px + env(safe-area-inset-left));
+      padding-right:calc(12px + env(safe-area-inset-right));
+    }
+  }
+  body{
+    padding-bottom:env(safe-area-inset-bottom);
+  }
 </style>
 </head>
 <body>
@@ -363,6 +416,20 @@
       <button type="submit" class="login-btn"><i class="fa-solid fa-right-to-bracket"></i> Entrar</button>
     </form>
     <div class="login-hint">Selecione seu usuário e informe sua senha. Gerencie usuários em Config.</div>
+  </div>
+</div>
+
+<!-- ===== MODAL: INSTRUÇÕES INSTALAÇÃO iOS ===== -->
+<div class="login-overlay" id="iosInstallOverlay" style="z-index:3000;">
+  <div class="login-box" style="text-align:left;">
+    <h1 style="text-align:center;"><i class="fa-solid fa-mobile-screen-button" style="color:var(--gold-deep); margin-right:6px;"></i>Instalar o app</h1>
+    <p class="login-sub" style="text-align:center;">Siga os passos abaixo no Safari</p>
+    <ol style="padding-left:18px; font-size:.85rem; color:var(--text); line-height:1.8; margin:16px 0;">
+      <li>Toque no ícone de <b>Compartilhar</b> <i class="fa-solid fa-arrow-up-from-bracket"></i> na barra do Safari</li>
+      <li>Role para baixo e toque em <b>"Adicionar à Tela de Início"</b></li>
+      <li>Toque em <b>"Adicionar"</b> no canto superior direito</li>
+    </ol>
+    <button class="login-btn" onclick="fecharInstrucoesIOS()">Entendi</button>
   </div>
 </div>
 
@@ -389,6 +456,8 @@
       <span id="hdrLucroMes">R$ 0,00</span>
     </div>
     <a href="#" class="btn-wa-header" id="btnWaHeader"><i class="fa-brands fa-whatsapp"></i> Compartilhar</a>
+    <button class="btn-wa-header" id="btnInstalarApp" onclick="instalarApp()" style="display:none; background:var(--gold-deep); border:none;"><i class="fa-solid fa-download"></i> Instalar app</button>
+    <button class="btn-wa-header" id="btnInstalarIOS" onclick="abrirInstrucoesIOS()" style="display:none; background:var(--gold-deep); border:none;"><i class="fa-solid fa-download"></i> Instalar app</button>
     <div class="header-stat" style="text-align:right;">
       <b>Usuário</b>
       <span id="hdrUsuarioLogado" style="font-size:.72rem;"></span>
@@ -615,6 +684,15 @@
         <h3><i class="fa-solid fa-list"></i> Histórico de vendas</h3>
         <div class="toolbar">
           <input type="month" id="vdFiltroMes" onchange="renderVendas()">
+          <select id="vdFiltroGrupo" onchange="renderVendas()" style="padding:8px 10px; border:1.5px solid var(--line); border-radius:6px;">
+            <option value="">Todos os centros de custo</option>
+            <option value="Frango">Frango</option>
+            <option value="Guarnição">Guarnição</option>
+            <option value="Bebida">Bebida</option>
+            <option value="Pizzas">Pizzas</option>
+            <option value="Taxa de entrega">Taxa de entrega</option>
+            <option value="Outros">Outros</option>
+          </select>
           <button class="btn outline sm" onclick="exportarVendasExcel()"><i class="fa-solid fa-file-excel"></i> Excel</button>
           <button class="btn outline sm" onclick="exportarVendasPDF()"><i class="fa-solid fa-file-pdf"></i> PDF</button>
           <button class="btn outline sm" onclick="exportarVendasJPG()"><i class="fa-solid fa-file-image"></i> JPG</button>
@@ -718,6 +796,15 @@
         <h3><i class="fa-solid fa-list"></i> Histórico de despesas</h3>
         <div class="toolbar">
           <input type="month" id="dsFiltroMes" onchange="renderDespesas()">
+          <select id="dsFiltroGrupo" onchange="renderDespesas()" style="padding:8px 10px; border:1.5px solid var(--line); border-radius:6px;">
+            <option value="">Todos os centros de custo</option>
+            <option value="Frango">Frango</option>
+            <option value="Guarnição">Guarnição</option>
+            <option value="Bebida">Bebida</option>
+            <option value="Pizzas">Pizzas</option>
+            <option value="Taxa de entrega">Taxa de entrega</option>
+            <option value="Geral">Geral</option>
+          </select>
           <button class="btn outline sm" onclick="exportarDespesasExcel()"><i class="fa-solid fa-file-excel"></i> Excel</button>
           <button class="btn outline sm" onclick="exportarDespesasPDF()"><i class="fa-solid fa-file-pdf"></i> PDF</button>
           <button class="btn outline sm" onclick="exportarDespesasJPG()"><i class="fa-solid fa-file-image"></i> JPG</button>
@@ -828,6 +915,56 @@
         <span>Despesas: <span id="grpTotalDespesas">R$ 0,00</span></span>
         <span>Lucro geral do mês: <span id="grpTotalGeral">R$ 0,00</span></span>
       </div>
+    </div>
+
+    <div class="panel-box">
+      <h3><i class="fa-solid fa-cash-register"></i> Fluxo de caixa por centro de custo</h3>
+      <p class="sub" style="color:var(--muted); font-size:.75rem; margin-top:-8px;">Registre entradas e retiradas de dinheiro por centro de custo. Compras de material (despesas) já lançadas na aba Despesas são deduzidas automaticamente do saldo do respectivo centro.</p>
+      <div class="form-row">
+        <div class="field" style="max-width:150px;">
+          <label>Data</label>
+          <input type="date" id="cxData">
+        </div>
+        <div class="field" style="max-width:170px;">
+          <label>Centro de custo</label>
+          <select id="cxCentro">
+            <option>Frango</option>
+            <option>Guarnição</option>
+            <option>Bebida</option>
+            <option>Pizzas</option>
+            <option>Taxa de entrega</option>
+            <option selected>Geral</option>
+          </select>
+        </div>
+        <div class="field" style="max-width:130px;">
+          <label>Valor</label>
+          <input type="number" id="cxValor" min="0" step="0.01">
+        </div>
+        <div class="field">
+          <label>Observação</label>
+          <input type="text" id="cxObs" placeholder="Opcional">
+        </div>
+      </div>
+      <div class="form-row">
+        <button class="btn ok" onclick="salvarCaixaMov('entrada')"><i class="fa-solid fa-arrow-down"></i> Registrar entrada</button>
+        <button class="btn danger" onclick="salvarCaixaMov('saida')"><i class="fa-solid fa-arrow-up"></i> Registrar retirada</button>
+      </div>
+
+      <div class="table-wrap" style="margin-top:16px;">
+        <table>
+          <thead><tr><th>Centro de custo</th><th>Entradas</th><th>Retiradas</th><th>Despesas (compras)</th><th>Saldo em caixa</th></tr></thead>
+          <tbody id="cxResumoTabela"></tbody>
+        </table>
+      </div>
+
+      <h3 style="margin-top:20px; font-size:.85rem; border-top:1px solid var(--line); padding-top:14px;"><i class="fa-solid fa-list"></i> Movimentações do mês</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Tipo</th><th>Centro de custo</th><th>Valor</th><th>Observação</th><th></th></tr></thead>
+          <tbody id="cxTabela"></tbody>
+        </table>
+      </div>
+      <div class="empty-msg" id="cxVazio" style="display:none;">Nenhuma movimentação de caixa neste mês.</div>
     </div>
   </div>
 
@@ -987,6 +1124,34 @@
   </div>
 </div>
 
+<!-- ===== MODAL EDITAR MOVIMENTO DE CAIXA ===== -->
+<div class="modal-overlay" id="modalEditarCaixa">
+  <div class="modal-box">
+    <div class="modal-head"><h3>Editar movimento de caixa</h3><i class="fa-solid fa-xmark" onclick="fecharModal('modalEditarCaixa')"></i></div>
+    <div class="modal-body">
+      <input type="hidden" id="cxeId">
+      <div class="form-row">
+        <div class="field"><label>Data</label><input type="date" id="cxeData"></div>
+        <div class="field"><label>Tipo</label>
+          <select id="cxeTipo"><option value="entrada">Entrada</option><option value="saida">Retirada</option></select>
+        </div>
+        <div class="field"><label>Centro de custo</label>
+          <select id="cxeCentro"><option>Frango</option><option>Guarnição</option><option>Bebida</option><option>Pizzas</option><option>Taxa de entrega</option><option>Geral</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field" style="max-width:140px;"><label>Valor</label><input type="number" id="cxeValor" min="0" step="0.01"></div>
+        <div class="field"><label>Observação</label><input type="text" id="cxeObs"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn danger" onclick="excluirCaixaModal()"><i class="fa-solid fa-trash"></i> Excluir</button>
+      <button class="btn outline" onclick="fecharModal('modalEditarCaixa')">Cancelar</button>
+      <button class="btn paprika" onclick="salvarEdicaoCaixa()"><i class="fa-solid fa-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODAL EDITAR PRECO ===== -->
 <div class="modal-overlay" id="modalEditarPreco">
   <div class="modal-box">
@@ -1112,6 +1277,7 @@ function defaultData(){
     ],
     vendas: [],
     despesas: [],
+    caixaMov: [],
     estoque: [
       { id: uid(), item: 'Frango', unidade: 'un', estoqueInicial: 0, entradas: 0 },
       { id: uid(), item: 'Batata', unidade: 'kg', estoqueInicial: 0, entradas: 0 },
@@ -1168,6 +1334,7 @@ function loadData(){
         precos: saved.precos || d.precos,
         vendas: saved.vendas || [],
         despesas: saved.despesas || [],
+        caixaMov: saved.caixaMov || [],
         estoque: saved.estoque || d.estoque,
         usuarios: saved.usuarios || null,
         fechamentoObs: saved.fechamentoObs || {}
@@ -1236,6 +1403,7 @@ async function enviarGoogleSheetsAuto(){
       acao: 'enviar',
       vendas: data.vendas,
       despesas: data.despesas,
+      caixaMov: data.caixaMov,
       estoque: data.estoque,
       precos: data.precos,
       usuarios: data.usuarios,
@@ -1262,6 +1430,7 @@ async function importarGoogleSheetsAuto(){
     const importado = await resp.json();
     if(importado.vendas) data.vendas = importado.vendas;
     if(importado.despesas) data.despesas = importado.despesas;
+    if(importado.caixaMov) data.caixaMov = importado.caixaMov;
     if(importado.estoque && importado.estoque.length) data.estoque = mesclarEstoqueDuplicado(importado.estoque);
     if(importado.precos && importado.precos.length) data.precos = removerPrecosDuplicados(importado.precos);
     if(importado.usuarios && importado.usuarios.length) data.usuarios = importado.usuarios;
@@ -1616,9 +1785,34 @@ function salvarVenda(){
   renderAll();
 }
 
+function grupoDaVenda(v){
+  // Retorna a lista de centros de custo que essa venda movimenta
+  if(ehCombo(v.produto)){
+    const grupos = ['Frango'];
+    const acomp = (v.acompanhamento || '').split(',').map(s => s.trim()).filter(Boolean);
+    const beb = (v.bebida || '').split(',').map(s => s.trim()).filter(Boolean);
+    if(acomp.length) grupos.push('Guarnição');
+    if(beb.length) grupos.push('Bebida');
+    return grupos;
+  }
+  const gruposDef = {
+    'Frango': { itens: GRUPO_FRANGO },
+    'Guarnição': { itens: GRUPO_GUARNICAO },
+    'Bebida': { itens: GRUPO_BEBIDA },
+    'Pizzas': { itens: GRUPO_PIZZAS },
+    'Taxa de entrega': { itens: GRUPO_TAXA }
+  };
+  const g = grupoDoProduto(v.produto, gruposDef);
+  return [g || 'Outros'];
+}
+
 function renderVendas(){
   const mes = document.getElementById('vdFiltroMes').value || mesAtual();
-  const lista = data.vendas.filter(v => mesDaData(v.data) === mes).sort((a,b) => a.data < b.data ? 1 : -1);
+  const grupoFiltro = document.getElementById('vdFiltroGrupo') ? document.getElementById('vdFiltroGrupo').value : '';
+  let lista = data.vendas.filter(v => mesDaData(v.data) === mes).sort((a,b) => a.data < b.data ? 1 : -1);
+  if(grupoFiltro){
+    lista = lista.filter(v => grupoDaVenda(v).includes(grupoFiltro));
+  }
   const tbody = document.getElementById('vdTabela');
   tbody.innerHTML = lista.map(v => `
     <tr onclick="abrirEdicaoVenda('${v.id}')" style="cursor:pointer;">
@@ -1718,7 +1912,11 @@ function salvarDespesa(){
 
 function renderDespesas(){
   const mes = document.getElementById('dsFiltroMes').value || mesAtual();
-  const lista = data.despesas.filter(d => mesDaData(d.data) === mes).sort((a,b) => a.data < b.data ? 1 : -1);
+  const grupoFiltro = document.getElementById('dsFiltroGrupo') ? document.getElementById('dsFiltroGrupo').value : '';
+  let lista = data.despesas.filter(d => mesDaData(d.data) === mes).sort((a,b) => a.data < b.data ? 1 : -1);
+  if(grupoFiltro){
+    lista = lista.filter(d => (d.grupo || 'Geral') === grupoFiltro);
+  }
   const tbody = document.getElementById('dsTabela');
   tbody.innerHTML = lista.map(d => `
     <tr onclick="abrirEdicaoDespesa('${d.id}')" style="cursor:pointer;">
@@ -1756,6 +1954,125 @@ function renderResumoDespesasGrupo(grupos, listaGrupos, tbodyId, totalId){
   }).join('');
   const totalDespesas = listaGrupos.reduce((s,g) => s + grupos[g].despesas, 0);
   document.getElementById(totalId).textContent = fmtMoeda(totalDespesas);
+}
+
+/* ============================================================
+   FLUXO DE CAIXA POR CENTRO DE CUSTO
+   Entradas/retiradas de dinheiro lançadas manualmente.
+   Despesas (compras de material) já cadastradas na aba Despesas
+   deduzem automaticamente do saldo do centro de custo correspondente,
+   reaproveitando a mesma lógica de agrupamento por centro de custo.
+   ============================================================ */
+const CENTROS_CAIXA = ['Frango', 'Guarnição', 'Bebida', 'Pizzas', 'Taxa de entrega', 'Geral'];
+
+function salvarCaixaMov(tipo){
+  if(!apenasAdmin()) return;
+  const dataMov = document.getElementById('cxData').value;
+  const centro = document.getElementById('cxCentro').value;
+  const valor = parseFloat(document.getElementById('cxValor').value);
+  const obs = document.getElementById('cxObs').value.trim();
+
+  if(!dataMov){ alert('Informe a data da movimentação.'); return; }
+  if(!valor || valor <= 0){ alert('Informe um valor válido.'); return; }
+
+  data.caixaMov.push({ id: uid(), data: dataMov, tipo, centro, valor, obs });
+  saveData();
+
+  document.getElementById('cxValor').value = '';
+  document.getElementById('cxObs').value = '';
+
+  document.getElementById('fcFiltroMes').value = mesDaData(dataMov);
+  renderAll();
+}
+
+function renderCaixa(){
+  const mes = document.getElementById('fcFiltroMes').value || mesAtual();
+  const lista = data.caixaMov.filter(c => mesDaData(c.data) === mes).sort((a,b) => a.data < b.data ? 1 : -1);
+  const tbody = document.getElementById('cxTabela');
+  if(tbody){
+    tbody.innerHTML = lista.map(c => `
+      <tr onclick="abrirEdicaoCaixa('${c.id}')" style="cursor:pointer;">
+        <td>${fmtDataBR(c.data)}</td>
+        <td><span class="badge ${c.tipo === 'entrada' ? 'ok' : 'danger'}">${c.tipo === 'entrada' ? 'Entrada' : 'Retirada'}</span></td>
+        <td><span class="badge info">${escapeHtml(c.centro || 'Geral')}</span></td>
+        <td><b>${fmtMoeda(c.valor)}</b></td>
+        <td>${escapeHtml(c.obs || '')}</td>
+        <td class="col-actions"><i class="fa-solid fa-pen btn-icon"></i></td>
+      </tr>
+    `).join('');
+  }
+  const vazioEl = document.getElementById('cxVazio');
+  if(vazioEl) vazioEl.style.display = lista.length ? 'none' : 'block';
+
+  // despesas (compras de material) do mês, para deduzir do saldo de cada centro
+  const despesasMes = data.despesas.filter(d => mesDaData(d.data) === mes);
+
+  const resumo = {};
+  CENTROS_CAIXA.forEach(c => resumo[c] = { entradas: 0, saidas: 0, despesas: 0 });
+  lista.forEach(c => {
+    if(!resumo[c.centro]) resumo[c.centro] = { entradas: 0, saidas: 0, despesas: 0 };
+    if(c.tipo === 'entrada') resumo[c.centro].entradas += c.valor;
+    else resumo[c.centro].saidas += c.valor;
+  });
+  despesasMes.forEach(d => {
+    const centro = resumo[d.grupo] ? d.grupo : 'Geral';
+    if(!resumo[centro]) resumo[centro] = { entradas: 0, saidas: 0, despesas: 0 };
+    resumo[centro].despesas += (d.valor || 0);
+  });
+
+  const resumoEl = document.getElementById('cxResumoTabela');
+  if(resumoEl){
+    const centrosComMovimento = CENTROS_CAIXA.filter(c => resumo[c].entradas > 0 || resumo[c].saidas > 0 || resumo[c].despesas > 0);
+    resumoEl.innerHTML = centrosComMovimento.length ? centrosComMovimento.map(c => {
+      const saldo = resumo[c].entradas - resumo[c].saidas - resumo[c].despesas;
+      return `
+        <tr>
+          <td>${c}</td>
+          <td>${fmtMoeda(resumo[c].entradas)}</td>
+          <td>${fmtMoeda(resumo[c].saidas)}</td>
+          <td>${fmtMoeda(resumo[c].despesas)}</td>
+          <td><b style="color:${saldo>=0?'var(--ok)':'var(--danger)'}">${fmtMoeda(saldo)}</b></td>
+        </tr>
+      `;
+    }).join('') : '<tr><td colspan="5" style="text-align:center; color:var(--muted);">Nenhuma movimentação neste mês.</td></tr>';
+  }
+}
+
+function abrirEdicaoCaixa(id){
+  const c = data.caixaMov.find(x => x.id === id);
+  if(!c) return;
+  document.getElementById('cxeId').value = c.id;
+  document.getElementById('cxeData').value = c.data;
+  document.getElementById('cxeTipo').value = c.tipo;
+  document.getElementById('cxeCentro').value = c.centro || 'Geral';
+  document.getElementById('cxeValor').value = c.valor;
+  document.getElementById('cxeObs').value = c.obs || '';
+  abrirModal('modalEditarCaixa');
+}
+
+function salvarEdicaoCaixa(){
+  if(!apenasAdmin()) return;
+  const id = document.getElementById('cxeId').value;
+  const c = data.caixaMov.find(x => x.id === id);
+  if(!c) return;
+  c.data = document.getElementById('cxeData').value;
+  c.tipo = document.getElementById('cxeTipo').value;
+  c.centro = document.getElementById('cxeCentro').value;
+  c.valor = parseFloat(document.getElementById('cxeValor').value) || 0;
+  c.obs = document.getElementById('cxeObs').value.trim();
+  saveData();
+  fecharModal('modalEditarCaixa');
+  renderAll();
+}
+
+function excluirCaixaModal(){
+  if(!apenasAdmin()) return;
+  const id = document.getElementById('cxeId').value;
+  if(!confirm('Excluir esta movimentação?')) return;
+  data.caixaMov = data.caixaMov.filter(x => x.id !== id);
+  saveData();
+  fecharModal('modalEditarCaixa');
+  renderAll();
 }
 
 function abrirEdicaoDespesa(id){
@@ -2132,6 +2449,7 @@ function renderFechamento(){
     tbody.innerHTML = '';
     document.getElementById('fcVazio').style.display = 'block';
     renderRelatorioGrupos(vendasMes, despesasMes);
+    renderCaixa();
     return;
   }
   document.getElementById('fcVazio').style.display = 'none';
@@ -2158,6 +2476,7 @@ function renderFechamento(){
   }).join('');
 
   renderRelatorioGrupos(vendasMes, despesasMes);
+  renderCaixa();
 }
 
 function grupoDoProduto(nome, gruposDef){
@@ -2429,6 +2748,7 @@ async function enviarGoogleSheets(){
       acao: 'enviar',
       vendas: data.vendas,
       despesas: data.despesas,
+      caixaMov: data.caixaMov,
       estoque: data.estoque,
       precos: data.precos,
       usuarios: data.usuarios,
@@ -2460,6 +2780,7 @@ async function importarGoogleSheets(){
     const importado = await resp.json();
     if(importado.vendas) data.vendas = importado.vendas;
     if(importado.despesas) data.despesas = importado.despesas;
+    if(importado.caixaMov) data.caixaMov = importado.caixaMov;
     if(importado.estoque) data.estoque = mesclarEstoqueDuplicado(importado.estoque);
     if(importado.precos) data.precos = removerPrecosDuplicados(importado.precos);
     if(importado.usuarios && importado.usuarios.length) data.usuarios = importado.usuarios;
@@ -2760,14 +3081,16 @@ function gerarWordDeHTML(titulo, html, nomeArquivo){
 /* ----- Vendas ----- */
 function montarConteudoVendas(){
   const mes = document.getElementById('vdFiltroMes').value;
-  const vendasMes = mes ? data.vendas.filter(v => mesDaData(v.data) === mes) : data.vendas.slice();
+  const grupoFiltro = document.getElementById('vdFiltroGrupo') ? document.getElementById('vdFiltroGrupo').value : '';
+  let vendasMes = mes ? data.vendas.filter(v => mesDaData(v.data) === mes) : data.vendas.slice();
+  if(grupoFiltro) vendasMes = vendasMes.filter(v => grupoDaVenda(v).includes(grupoFiltro));
   const ordenadas = vendasMes.slice().sort((a,b) => a.data < b.data ? -1 : 1);
   const linhas = ordenadas.map(v => [
     fmtDataBR(v.data), escapeHtml(v.produto), v.quantidade, fmtMoeda(v.precoUnit),
     fmtMoeda(v.total), escapeHtml(v.pagamento || ''), escapeHtml(v.cliente || ''), escapeHtml(v.vendedor || '')
   ]);
   const total = ordenadas.reduce((s,v) => s + v.total, 0);
-  const titulo = `Histórico de Vendas${mes ? ' — ' + mes.split('-').reverse().join('/') : ''}`;
+  const titulo = `Histórico de Vendas${mes ? ' — ' + mes.split('-').reverse().join('/') : ''}${grupoFiltro ? ' — ' + grupoFiltro : ''}`;
   const html = gerarHTMLTabela(titulo, ['Data','Produto','Qtd','Preço unit.','Total','Pagamento','Cliente/Obs.','Vendedor'], linhas, `Total de vendas: ${fmtMoeda(total)}`);
   return { html, sufixo: mes || hojeStr() };
 }
@@ -2778,14 +3101,16 @@ function exportarVendasWord(){ const {html, sufixo} = montarConteudoVendas(); ge
 /* ----- Despesas ----- */
 function montarConteudoDespesas(){
   const mes = document.getElementById('dsFiltroMes').value;
-  const despesasMes = mes ? data.despesas.filter(d => mesDaData(d.data) === mes) : data.despesas.slice();
+  const grupoFiltro = document.getElementById('dsFiltroGrupo') ? document.getElementById('dsFiltroGrupo').value : '';
+  let despesasMes = mes ? data.despesas.filter(d => mesDaData(d.data) === mes) : data.despesas.slice();
+  if(grupoFiltro) despesasMes = despesasMes.filter(d => (d.grupo || 'Geral') === grupoFiltro);
   const ordenadas = despesasMes.slice().sort((a,b) => a.data < b.data ? -1 : 1);
   const linhas = ordenadas.map(d => [
     fmtDataBR(d.data), escapeHtml(d.descricao), escapeHtml(d.categoria || ''),
     escapeHtml(d.grupo || 'Geral'), fmtMoeda(d.valor), escapeHtml(d.obs || '')
   ]);
   const total = ordenadas.reduce((s,d) => s + d.valor, 0);
-  const titulo = `Histórico de Despesas${mes ? ' — ' + mes.split('-').reverse().join('/') : ''}`;
+  const titulo = `Histórico de Despesas${mes ? ' — ' + mes.split('-').reverse().join('/') : ''}${grupoFiltro ? ' — ' + grupoFiltro : ''}`;
   const html = gerarHTMLTabela(titulo, ['Data','Descrição','Categoria','Centro de custo','Valor','Observação'], linhas, `Total de despesas: ${fmtMoeda(total)}`);
   return { html, sufixo: mes || hojeStr() };
 }
@@ -2927,6 +3252,7 @@ document.getElementById('dsFiltroMes').value = mesAtual();
 document.getElementById('fcFiltroMes').value = mesAtual();
 document.getElementById('vdData').value = hojeStr();
 document.getElementById('dsData').value = hojeStr();
+document.getElementById('cxData').value = hojeStr();
 document.getElementById('painelMes').addEventListener('change', renderPainel);
 preencherConfigForm();
 
@@ -2951,6 +3277,61 @@ importarGoogleSheetsAuto();
 // Mantém sincronizado automaticamente: busca atualizações da planilha a cada 2 minutos
 // (útil quando outro usuário/dispositivo lança vendas ao mesmo tempo)
 setInterval(importarGoogleSheetsAuto, 120000);
+
+/* ============================================================
+   PWA: registro do service worker + botão "Instalar app"
+   ============================================================ */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {
+      // Sem suporte/erro ao registrar: o app segue funcionando normalmente
+    });
+  });
+}
+
+let _deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  const btn = document.getElementById('btnInstalarApp');
+  if(btn) btn.style.display = 'inline-flex';
+});
+
+function instalarApp(){
+  if(!_deferredInstallPrompt) return;
+  _deferredInstallPrompt.prompt();
+  _deferredInstallPrompt.userChoice.finally(() => {
+    _deferredInstallPrompt = null;
+    const btn = document.getElementById('btnInstalarApp');
+    if(btn) btn.style.display = 'none';
+  });
+}
+
+window.addEventListener('appinstalled', () => {
+  const btn = document.getElementById('btnInstalarApp');
+  if(btn) btn.style.display = 'none';
+});
+
+/* ---- iOS: instrução manual (não existe beforeinstallprompt no Safari) ---- */
+function estaRodandoInstalado(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function ehIOS(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad moderno
+}
+if(ehIOS() && !estaRodandoInstalado()){
+  const btnIOS = document.getElementById('btnInstalarIOS');
+  if(btnIOS) btnIOS.style.display = 'inline-flex';
+}
+function abrirInstrucoesIOS(){
+  document.getElementById('iosInstallOverlay').classList.add('open');
+}
+function fecharInstrucoesIOS(){
+  document.getElementById('iosInstallOverlay').classList.remove('open');
+  const btn = document.getElementById('btnInstalarIOS');
+  if(btn) btn.style.display = 'none'; // já mostrou como instalar, some até recarregar
+}
 </script>
 </body>
 </html>
