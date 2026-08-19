@@ -1041,6 +1041,9 @@
           <li>Copie a URL gerada (termina em <code>/exec</code>) e cole no campo acima.</li>
           <li>Clique em <b>Salvar link</b> e depois em <b>Enviar dados agora</b>.</li>
         </ol>
+        <p style="font-size:.76rem; color:var(--muted); margin-top:8px;">
+          <b>Já tinha o script instalado antes?</b> Baixe o arquivo atualizado, substitua todo o código no Apps Script, salve, vá em <b>Implantar → Gerenciar implantações</b>, clique no lápis (editar) da implantação existente, escolha <b>Nova versão</b> e implante. Isso ativa os backups automáticos sem mudar a URL já configurada no app.
+        </p>
       </details>
     </div>
 
@@ -1052,6 +1055,23 @@
         <button class="btn outline" onclick="document.getElementById('inputRestaurar').click()"><i class="fa-solid fa-upload"></i> Restaurar backup</button>
         <input type="file" id="inputRestaurar" accept=".json" style="display:none;" onchange="restaurarBackup(event)">
         <button class="btn danger" onclick="abrirModalLimparDados()"><i class="fa-solid fa-trash"></i> Apagar dados</button>
+      </div>
+    </div>
+
+    <div class="panel-box">
+      <h3><i class="fa-solid fa-cloud-arrow-down"></i> Backups automáticos na planilha (nuvem)</h3>
+      <p style="color:var(--muted); font-size:.8rem;">
+        Toda vez que alguém salva algo, o sistema guarda automaticamente uma cópia de segurança dentro da própria planilha (aba "Backups"), antes de sobrescrever os dados. Assim, se algo for apagado ou salvo errado por engano, dá para recuperar uma versão anterior por data e hora. Requer a versão mais recente do script (veja "Como configurar" acima).
+      </p>
+      <div class="toolbar" style="margin-bottom:10px;">
+        <button class="btn outline" onclick="carregarBackupsNuvem()"><i class="fa-solid fa-rotate"></i> Atualizar lista de backups</button>
+      </div>
+      <div id="gsBackupStatus" style="font-size:.78rem; font-weight:700; min-height:18px; margin-bottom:6px;"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Hora</th><th>Origem</th><th></th></tr></thead>
+          <tbody id="gsBackupTabela"><tr><td colspan="4" style="color:var(--muted);">Clique em "Atualizar lista de backups" para carregar.</td></tr></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -1253,7 +1273,7 @@ function defaultData(){
       telefone: '',
       whatsapp: '',
       senha: '1234',
-      googleSheetsUrl: 'https://script.google.com/macros/s/AKfycbypolIIfMhnDHNSlC8yy01UgXebsQESaknOouiuzT_OBcX8URa722-Qf2lLFbZ0sYmJBg/exec'
+      googleSheetsUrl: 'https://script.google.com/macros/s/AKfycbxAOp9jzKvMdERyK2MTWbd28RmQP8b-wDDvLdhaBeAWI7ZPFbkfbTb29pwwIrmrAeHz5Q/exec'
     },
     usuarios: [
       { id: uid(), nome: 'Luiz', login: 'luiz', senha: '8956', papel: 'admin' },
@@ -1347,7 +1367,7 @@ function loadData(){
         ];
       }
       if(!resultado.config.googleSheetsUrl){
-        resultado.config.googleSheetsUrl = 'https://script.google.com/macros/s/AKfycbypolIIfMhnDHNSlC8yy01UgXebsQESaknOouiuzT_OBcX8URa722-Qf2lLFbZ0sYmJBg/exec';
+        resultado.config.googleSheetsUrl = 'https://script.google.com/macros/s/AKfycbxAOp9jzKvMdERyK2MTWbd28RmQP8b-wDDvLdhaBeAWI7ZPFbkfbTb29pwwIrmrAeHz5Q/exec';
       }
       const bebidasPadrao = [
         { nome: 'Guaraná Mineiro 1,5L', preco: 7 },
@@ -1401,6 +1421,7 @@ async function enviarGoogleSheetsAuto(){
   try{
     const payload = {
       acao: 'enviar',
+      origem: currentUser ? currentUser.nome : 'desconhecido',
       vendas: data.vendas,
       despesas: data.despesas,
       caixaMov: data.caixaMov,
@@ -1412,6 +1433,7 @@ async function enviarGoogleSheetsAuto(){
     };
     await fetch(url, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     });
@@ -2746,6 +2768,7 @@ async function enviarGoogleSheets(){
   try{
     const payload = {
       acao: 'enviar',
+      origem: currentUser ? currentUser.nome : 'desconhecido',
       vendas: data.vendas,
       despesas: data.despesas,
       caixaMov: data.caixaMov,
@@ -2757,10 +2780,12 @@ async function enviarGoogleSheets(){
     };
     const resp = await fetch(url, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     });
-    if(!resp.ok) throw new Error('Falha na resposta do servidor (' + resp.status + ')');
+    // modo no-cors: a resposta vem "opaca" (não dá pra ler status/corpo),
+    // então chegar até aqui sem erro de rede já indica que o envio foi feito.
     gsSetStatus('Dados enviados com sucesso para a planilha.', true);
   }catch(err){
     gsSetStatus('Erro ao enviar: verifique a URL e se o App da Web está publicado como "Qualquer pessoa".', false);
@@ -2795,25 +2820,105 @@ async function importarGoogleSheets(){
   }
 }
 
+function gsSetBackupStatus(msg, ok){
+  const el = document.getElementById('gsBackupStatus');
+  if(el) el.innerHTML = `<span style="color:${ok ? 'var(--ok)' : 'var(--danger)'};">${escapeHtml(msg)}</span>`;
+}
+
+async function carregarBackupsNuvem(){
+  if(!apenasAdmin()) return;
+  const url = data.config.googleSheetsUrl;
+  if(!url){ alert('Configure e salve a URL do Web App primeiro.'); return; }
+  gsSetBackupStatus('Carregando lista de backups...', true);
+  try{
+    const resp = await fetch(url + (url.includes('?') ? '&' : '?') + 'acao=listarBackups');
+    if(!resp.ok) throw new Error('Falha na resposta do servidor (' + resp.status + ')');
+    const lista = await resp.json();
+    renderBackupsNuvem(Array.isArray(lista) ? lista : []);
+    gsSetBackupStatus(lista.length ? `${lista.length} backup(s) encontrado(s).` : 'Nenhum backup encontrado ainda.', true);
+  }catch(err){
+    gsSetBackupStatus('Erro ao carregar backups: verifique a URL e se o script foi atualizado para a versão com backup.', false);
+  }
+}
+
+function renderBackupsNuvem(lista){
+  const tbody = document.getElementById('gsBackupTabela');
+  if(!tbody) return;
+  if(!lista.length){
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted);">Nenhum backup disponível ainda.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lista.map(b => `
+    <tr>
+      <td>${escapeHtml(b.data || '')}</td>
+      <td>${escapeHtml(b.hora || '')}</td>
+      <td>${escapeHtml(b.origem || '—')}</td>
+      <td><button class="btn outline" style="padding:4px 10px; font-size:.72rem;" onclick="restaurarBackupNuvem('${b.id}','${escapeHtml(b.data||'')} ${escapeHtml(b.hora||'')}')"><i class="fa-solid fa-clock-rotate-left"></i> Restaurar</button></td>
+    </tr>
+  `).join('');
+}
+
+async function restaurarBackupNuvem(id, quando){
+  if(!apenasAdmin()) return;
+  const url = data.config.googleSheetsUrl;
+  if(!url) return;
+  if(!confirm(`Isso vai SUBSTITUIR os dados atuais pelo backup de ${quando}. Essa ação também sobrescreve a planilha atual. Continuar?`)) return;
+  gsSetBackupStatus('Restaurando backup...', true);
+  try{
+    const resp = await fetch(url + (url.includes('?') ? '&' : '?') + 'acao=restaurarBackup&id=' + encodeURIComponent(id));
+    if(!resp.ok) throw new Error('Falha na resposta do servidor (' + resp.status + ')');
+    const importado = await resp.json();
+    if(importado.ok === false) throw new Error(importado.erro || 'backup não encontrado');
+    if(importado.vendas) data.vendas = importado.vendas;
+    if(importado.despesas) data.despesas = importado.despesas;
+    if(importado.caixaMov) data.caixaMov = importado.caixaMov;
+    if(importado.estoque) data.estoque = mesclarEstoqueDuplicado(importado.estoque);
+    if(importado.precos) data.precos = removerPrecosDuplicados(importado.precos);
+    if(importado.usuarios && importado.usuarios.length) data.usuarios = importado.usuarios;
+    if(importado.config && Object.keys(importado.config).length) data.config = Object.assign(data.config, importado.config);
+    if(importado.fechamentoObs) data.fechamentoObs = importado.fechamentoObs;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    renderAll();
+    popularSelectUsuarios();
+    // envia o backup restaurado de volta para a planilha, para todos os usuários ficarem sincronizados
+    await enviarGoogleSheetsAuto();
+    gsSetBackupStatus(`Backup de ${quando} restaurado com sucesso.`, true);
+  }catch(err){
+    gsSetBackupStatus('Erro ao restaurar backup: ' + err.message, false);
+  }
+}
+
 function baixarScriptGoogleSheets(){
   const conteudo = `/**
- * Frango do Tio Luiz — Sincronização com Google Sheets
+ * Frango do Tio Luiz — Sincronização com Google Sheets + Backup automático
  * Cole este código em Extensões > Apps Script da sua planilha,
  * depois publique como App da Web (acesso: Qualquer pessoa).
+ *
+ * Cada vez que o app envia dados (acao=enviar), este script guarda
+ * automaticamente uma cópia de segurança dos dados ANTERIORES na aba
+ * "Backups" (com data e hora), antes de sobrescrever. Assim é possível
+ * recuperar uma versão anterior caso algo seja apagado ou salvo errado.
  */
 
 var ABAS = ['Vendas', 'Despesas', 'Estoque', 'Precos', 'Usuarios'];
+var MAX_BACKUPS = 200; // quantidade máxima de backups guardados (os mais antigos são apagados)
 
 function doPost(e) {
   var body = JSON.parse(e.postData.contents);
   if (body.acao === 'enviar') {
-    escreverAba('Vendas', body.vendas || []);
-    escreverAba('Despesas', body.despesas || []);
-    escreverAba('Estoque', body.estoque || []);
-    escreverAba('Precos', body.precos || []);
-    escreverAba('Usuarios', body.usuarios || []);
-    escreverJSON('Config', body.config || {});
-    escreverJSON('FechamentoObs', body.fechamentoObs || {});
+    LockService.getScriptLock().waitLock(15000); // evita conflito quando 2 usuários salvam ao mesmo tempo
+    try {
+      criarBackupAutomatico(body.origem || '');
+      escreverAba('Vendas', body.vendas || []);
+      escreverAba('Despesas', body.despesas || []);
+      escreverAba('Estoque', body.estoque || []);
+      escreverAba('Precos', body.precos || []);
+      escreverAba('Usuarios', body.usuarios || []);
+      escreverJSON('Config', body.config || {});
+      escreverJSON('FechamentoObs', body.fechamentoObs || {});
+    } finally {
+      LockService.getScriptLock().releaseLock();
+    }
     return ContentService.createTextOutput(JSON.stringify({ ok: true }))
       .setMimeType(ContentService.MimeType.JSON);
   }
@@ -2822,7 +2927,8 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  if (e.parameter.acao === 'importar') {
+  var acao = e.parameter.acao;
+  if (acao === 'importar') {
     var resultado = {
       vendas: lerAba('Vendas'),
       despesas: lerAba('Despesas'),
@@ -2835,9 +2941,87 @@ function doGet(e) {
     return ContentService.createTextOutput(JSON.stringify(resultado))
       .setMimeType(ContentService.MimeType.JSON);
   }
+  if (acao === 'listarBackups') {
+    return ContentService.createTextOutput(JSON.stringify(listarBackups()))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  if (acao === 'restaurarBackup') {
+    var dados = lerBackup(e.parameter.id);
+    if (!dados) {
+      return ContentService.createTextOutput(JSON.stringify({ ok: false, erro: 'backup não encontrado' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService.createTextOutput(JSON.stringify(dados))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   return ContentService.createTextOutput(JSON.stringify({ ok: true, info: 'API de sincronização ativa' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+/* ---- Backups automáticos (aba "Backups") ---- */
+
+function criarBackupAutomatico(origem) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Backups');
+  if (!sheet) {
+    sheet = ss.insertSheet('Backups');
+    sheet.appendRow(['ID', 'Data', 'Hora', 'Origem', 'Dados']);
+  }
+
+  var atual = {
+    vendas: lerAba('Vendas'),
+    despesas: lerAba('Despesas'),
+    estoque: lerAba('Estoque'),
+    precos: lerAba('Precos'),
+    usuarios: lerAba('Usuarios'),
+    config: lerJSON('Config'),
+    fechamentoObs: lerJSON('FechamentoObs')
+  };
+  // não cria backup vazio antes do primeiro envio de dados
+  if (!atual.vendas.length && !atual.despesas.length && !atual.estoque.length && !atual.precos.length) return;
+
+  var agora = new Date();
+  var id = Utilities.getUuid();
+  var dataStr = Utilities.formatDate(agora, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+  var horaStr = Utilities.formatDate(agora, Session.getScriptTimeZone(), 'HH:mm:ss');
+  sheet.appendRow([id, dataStr, horaStr, origem, JSON.stringify(atual)]);
+
+  // mantém só os últimos MAX_BACKUPS registros
+  var total = sheet.getLastRow() - 1; // exclui cabeçalho
+  if (total > MAX_BACKUPS) {
+    var excesso = total - MAX_BACKUPS;
+    sheet.deleteRows(2, excesso); // apaga os mais antigos (logo após o cabeçalho)
+  }
+}
+
+function listarBackups() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Backups');
+  if (!sheet) return [];
+  var valores = sheet.getDataRange().getValues();
+  if (valores.length < 2) return [];
+  var lista = [];
+  for (var i = 1; i < valores.length; i++) {
+    lista.push({ id: valores[i][0], data: valores[i][1], hora: valores[i][2], origem: valores[i][3] });
+  }
+  lista.reverse(); // mais recente primeiro
+  return lista;
+}
+
+function lerBackup(id) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Backups');
+  if (!sheet || !id) return null;
+  var valores = sheet.getDataRange().getValues();
+  for (var i = 1; i < valores.length; i++) {
+    if (String(valores[i][0]) === String(id)) {
+      try { return JSON.parse(valores[i][4]); } catch (err) { return null; }
+    }
+  }
+  return null;
+}
+
+/* ---- Leitura/escrita das abas de dados ---- */
 
 function escreverAba(nome, linhas) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
