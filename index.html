@@ -415,7 +415,7 @@
       <label>Senha</label>
       <input type="password" id="loginSenha" inputmode="numeric" maxlength="12" placeholder="••••" style="margin-top:4px;">
       <div class="login-error" id="loginError"></div>
-      <button type="submit" class="login-btn"><i class="fa-solid fa-right-to-bracket"></i> Entrar</button>
+      <button type="submit" class="login-btn" id="loginBtnSubmit"><i class="fa-solid fa-right-to-bracket"></i> Entrar</button>
     </form>
     <div class="login-hint">Selecione seu usuário e informe sua senha. Gerencie usuários em Config.</div>
   </div>
@@ -853,11 +853,20 @@
           <label>Preço (R$)</label>
           <input type="number" id="pcPreco" min="0" step="0.01">
         </div>
+        <div class="field" style="max-width:110px;">
+          <label>Unidade</label>
+          <input type="text" id="pcUnidade" placeholder="un, kg..." value="un">
+        </div>
+        <div class="field" style="max-width:140px;">
+          <label>Quanto tem no estoque</label>
+          <input type="number" id="pcEstoqueInicial" min="0" step="0.01" value="0">
+        </div>
         <button class="btn paprika" onclick="salvarPreco()"><i class="fa-solid fa-check"></i> Adicionar</button>
       </div>
     </div>
     <div class="panel-box">
       <h3><i class="fa-solid fa-tags"></i> Tabela de preços</h3>
+      <p class="sub" style="color:var(--muted); font-size:.75rem; margin-top:-8px;">Todo item cadastrado aqui aparece automaticamente no Controle de estoque.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Produto/Item</th><th>Preço</th><th></th></tr></thead>
@@ -1348,6 +1357,46 @@ function mesclarEstoqueDuplicado(estoque){
   return Array.from(vistos.values());
 }
 
+function removerUsuariosDuplicados(usuarios){
+  if(!Array.isArray(usuarios)) return usuarios;
+  // primeiro remove ids repetidos (mesmo registro salvo mais de uma vez)
+  const porId = new Map();
+  usuarios.forEach(u => {
+    if(!u || !u.id) return;
+    porId.set(u.id, u);
+  });
+  // depois remove logins repetidos (mesma pessoa cadastrada com ids diferentes), mantendo o mais recente
+  const porLogin = new Map();
+  Array.from(porId.values()).forEach(u => {
+    const chave = (u.login||'').toString().trim().toLowerCase();
+    if(!chave) return;
+    porLogin.set(chave, u);
+  });
+  return Array.from(porLogin.values());
+}
+
+/* Garante que todo item da tabela de preços tenha um item correspondente
+   no controle de estoque (criado automaticamente se ainda não existir). */
+function sincronizarEstoqueComPrecos(){
+  let mudou = false;
+  data.precos.forEach(p => {
+    const nome = (p.nome||'').trim();
+    if(!nome) return;
+    const existente = data.estoque.find(e => e.item.trim().toLowerCase() === nome.toLowerCase());
+    if(!existente){
+      data.estoque.push({
+        id: uid(),
+        item: nome,
+        unidade: p.unidade || 'un',
+        estoqueInicial: p.estoqueInicial || 0,
+        entradas: 0
+      });
+      mudou = true;
+    }
+  });
+  return mudou;
+}
+
 function loadData(){
   try{
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -1394,6 +1443,7 @@ function loadData(){
       // remove produtos e itens de estoque duplicados (mesmo nome) que possam ter entrado nos dados salvos
       resultado.precos = removerPrecosDuplicados(resultado.precos);
       resultado.estoque = mesclarEstoqueDuplicado(resultado.estoque);
+      resultado.usuarios = removerUsuariosDuplicados(resultado.usuarios);
       return resultado;
     }
   }catch(e){}
@@ -1491,11 +1541,11 @@ async function importarGoogleSheetsAuto(){
     if(importado.estoque && importado.estoque.length) data.estoque = mesclarEstoqueDuplicado(importado.estoque);
     if(importado.precos && importado.precos.length) data.precos = removerPrecosDuplicados(importado.precos);
     if(importado.usuarios && importado.usuarios.length){
-      data.usuarios = importado.usuarios.map(u => ({
+      data.usuarios = removerUsuariosDuplicados(importado.usuarios.map(u => ({
         ...u,
         login: u.login != null ? String(u.login) : u.login,
         senha: u.senha != null ? String(u.senha) : u.senha
-      }));
+      })));
     }
     if(importado.config && Object.keys(importado.config).length) data.config = Object.assign(data.config, importado.config);
     if(importado.fechamentoObs) data.fechamentoObs = importado.fechamentoObs;
@@ -1580,20 +1630,34 @@ function popularSelectUsuarios(){
   sel.innerHTML = data.usuarios.map(u => `<option value="${escapeAttr(u.id)}">${escapeHtml(u.nome)}</option>`).join('');
 }
 
-document.getElementById('loginForm').addEventListener('submit', function(e){
+document.getElementById('loginForm').addEventListener('submit', async function(e){
   e.preventDefault();
   const userId = document.getElementById('loginUsuario').value;
   const senha = document.getElementById('loginSenha').value;
+  const btn = document.getElementById('loginBtnSubmit');
+  const errorEl = document.getElementById('loginError');
+
+  const textoOriginalBtn = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sincronizando...';
+  errorEl.textContent = '';
+
+  // Sincroniza com a planilha antes de validar, para não usar dados desatualizados do navegador
+  await importarGoogleSheetsAuto();
+
+  btn.disabled = false;
+  btn.innerHTML = textoOriginalBtn;
+
   const usuario = data.usuarios.find(u => u.id === userId);
   if(usuario && senha === String(usuario.senha)){
     currentUser = { id: usuario.id, nome: usuario.nome, papel: usuario.papel };
     sessionStorage.setItem('frango_sessao', JSON.stringify(currentUser));
-    document.getElementById('loginError').textContent = '';
+    errorEl.textContent = '';
     document.getElementById('loginSenha').value = '';
     hideLogin();
     afterLogin();
   }else{
-    document.getElementById('loginError').textContent = 'Senha incorreta. Tente novamente.';
+    errorEl.textContent = 'Senha incorreta. Tente novamente.';
   }
 });
 
@@ -2213,6 +2277,8 @@ function salvarPreco(){
   if(!apenasAdmin()) return;
   const nome = document.getElementById('pcNome').value.trim();
   const preco = parseFloat(document.getElementById('pcPreco').value);
+  const unidade = document.getElementById('pcUnidade').value.trim() || 'un';
+  const estoqueInicial = parseFloat(document.getElementById('pcEstoqueInicial').value) || 0;
   if(!nome){ alert('Informe o nome do produto.'); return; }
   if(preco == null || isNaN(preco) || preco < 0){ alert('Informe um preço válido.'); return; }
   const existente = data.precos.find(p => p.nome.trim().toLowerCase() === nome.toLowerCase());
@@ -2220,10 +2286,17 @@ function salvarPreco(){
     alert(`Já existe um produto chamado "${existente.nome}". Edite-o na tabela em vez de cadastrar novamente.`);
     return;
   }
-  data.precos.push({ id: uid(), nome, preco });
+  data.precos.push({ id: uid(), nome, preco, unidade, estoqueInicial });
+  // cria automaticamente o item correspondente no controle de estoque, se ainda não existir
+  const jaTemEstoque = data.estoque.find(e => e.item.trim().toLowerCase() === nome.toLowerCase());
+  if(!jaTemEstoque){
+    data.estoque.push({ id: uid(), item: nome, unidade, estoqueInicial, entradas: 0 });
+  }
   saveData();
   document.getElementById('pcNome').value = '';
   document.getElementById('pcPreco').value = '';
+  document.getElementById('pcUnidade').value = 'un';
+  document.getElementById('pcEstoqueInicial').value = 0;
   renderAll();
 }
 
@@ -2269,8 +2342,14 @@ function salvarEdicaoPreco(){
     alert(`Já existe um produto chamado "${duplicado.nome}".`);
     return;
   }
+  const nomeAntigo = p.nome;
   p.nome = novoNome;
   p.preco = parseFloat(document.getElementById('epPreco').value) || 0;
+  // mantém o item de estoque vinculado ao renomear
+  const estoqueVinculado = data.estoque.find(e => e.item.trim().toLowerCase() === nomeAntigo.trim().toLowerCase());
+  if(estoqueVinculado){
+    estoqueVinculado.item = novoNome;
+  }
   saveData();
   fecharModal('modalEditarPreco');
   renderAll();
@@ -2882,11 +2961,11 @@ async function importarGoogleSheets(){
     if(importado.estoque) data.estoque = mesclarEstoqueDuplicado(importado.estoque);
     if(importado.precos) data.precos = removerPrecosDuplicados(importado.precos);
     if(importado.usuarios && importado.usuarios.length){
-      data.usuarios = importado.usuarios.map(u => ({
+      data.usuarios = removerUsuariosDuplicados(importado.usuarios.map(u => ({
         ...u,
         login: u.login != null ? String(u.login) : u.login,
         senha: u.senha != null ? String(u.senha) : u.senha
-      }));
+      })));
     }
     if(importado.config && Object.keys(importado.config).length) data.config = Object.assign(data.config, importado.config);
     if(importado.fechamentoObs) data.fechamentoObs = importado.fechamentoObs;
@@ -3344,6 +3423,7 @@ function atualizarHeader(){
 
 function renderAll(){
   atualizarHeader();
+  if(sincronizarEstoqueComPrecos()) saveData();
   popularSelectProdutos('vdProduto');
   popularSelectProdutos('evProduto', undefined, true);
   if(document.getElementById('vdProduto').value) preencherPrecoVenda();
